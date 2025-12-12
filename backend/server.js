@@ -2,6 +2,6 @@ const express = require("express")
 
 const app = express()
 
-app.listen(8080, "localhost",()=>{
+app.listen(4000, "localhost",()=>{
     console.log("Server started at 8080")
 })
