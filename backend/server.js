@@ -1,7 +1,26 @@
-const express = require("express")
+const express=require("express")
 
-const app = express()
+const cors=require('cors')
 
-app.listen(4000, "localhost",()=>{
-    console.log("Server started at 8080")
+//user defined modules
+const userRouter=require('./routes/user')
+const teacherRouter=require('./routes/teacher')
+const principalRouter=require('./routes/principal')
+const studentRouter=require('./routes/student')
+const classRouter=require('./routes/class')
+
+const app=express()
+
+
+//Middlewares
+app.use(express.json())
+app.use('/user',userRouter)
+app.use('/teacher',teacherRouter)
+app.use('/principal',principalRouter)
+app.use('/student',studentRouter)
+app.use('/class',classRouter)
+
+app.listen(4000,'localhost',()=>{
+    console.log('server started at port 4000')
+
 })
