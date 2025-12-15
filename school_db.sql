@@ -51,7 +51,7 @@ CREATE TABLE student (
 
 CREATE TABLE class (
     class_id INT AUTO_INCREMENT PRIMARY KEY,
-    class_name VARCHAR(20),
+    class_std VARCHAR(20),
     section VARCHAR(10),
     class_teacher_id INT,
     FOREIGN KEY(class_teacher_id) REFERENCES employee(employee_id)
