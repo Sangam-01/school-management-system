@@ -77,4 +77,98 @@ router.post('/TeacherReg', (req, res) => {
     
 })
 
+
+
+router.post('/ProfileUpdate', (req, res) => {
+    const { mname, lname, mother_name} = req.body
+
+    const { email, address ,dob,class_id,gender,mobile} = req.body 
+const {employee_id} = req.header
+    const sql1 = 'INSERT INTO users (username, password ,role)values(?,?,?)'
+    const sql2 = 'update set  employee mname=? ,lname=?, address=?, gender=?,mobile=?,email=? where employee_id=?'
+
+    bcrypt.hash(password, SaltRounds, (err, hashedPassword) => {
+        if (hashedPassword) {
+           if (err) {
+            return res.send(result.createResult(err))
+        }
+
+        pool.query(sql1, [username, hashedPassword, role], (err, userResult) => {
+            if (err) {
+                return res.send(result.createResult(err))
+            }
+
+            const user_id = userResult.insertId
+
+            pool.query(sql2, [user_id, roll_no, reg_no, fname], (err, studentResult) => {
+                res.send(result.createResult(err, studentResult))
+            })
+        })
+    }})
+    
+})
+
+
+
+
+
+router.post('/marks', (req, res) => {
+  const { student_id, subject_id, marks_obtained, max_marks, grade } = req.body
+
+  const sql = `
+    INSERT INTO marks 
+    (student_id, subject_id, marks_obtained, max_marks, grade)
+    VALUES (?,?,?,?,?)`
+
+  pool.query(sql,
+    [student_id, subject_id, marks_obtained, max_marks, grade],
+    (err, data) => {
+      res.send(result.createResult(err, data))
+    }
+  )
+})
+
+
+
+// teacher.js
+router.post('/attendance/student', (req, res) => {
+  const { student_id, date, status } = req.body
+
+  const sql = `
+    INSERT INTO attendance_student (student_id, date, status)
+    VALUES (?,?,?)`
+
+  pool.query(sql, [student_id, date, status], (err, data) => {
+    res.send(result.createResult(err, data))
+  })
+})
+
+
+
+
+
+// attendance.js OR student.js
+router.get('/attendance/summary/:student_id', (req, res) => {
+  const { student_id } = req.params
+
+  const sql = `
+    SELECT
+      COUNT(*) AS total_days,
+      SUM(status IN ('Present','Late')) AS present_days,
+      ROUND(
+        (SUM(status IN ('Present','Late')) / COUNT(*)) * 100,
+        2
+      ) AS attendance_percentage
+    FROM attendance_student
+    WHERE student_id = ?`
+
+  pool.query(sql, [student_id], (err, data) => {
+    res.send(result.createResult(err, data[0]))
+  })
+})
+
+
+
+
+
 module.exports=router

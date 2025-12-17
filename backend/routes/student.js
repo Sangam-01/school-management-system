@@ -48,12 +48,12 @@ router.get('/getAll',(req,res)=>{
 })
 
 router.post('/StudentReg', (req, res) => {
-    const { roll_no, reg_no, fname} = req.body
+    const { roll_no, reg_no, fname,} = req.body
 
-    const { username, password ,role} = req.body 
+    const { username, password ,role,admission_date} = req.body 
 
     const sql1 = 'INSERT INTO users (username, password ,role)values(?,?,?)'
-    const sql2 = 'INSERT INTO student (user_id,roll_no, reg_no, fname)values(?,?,?,?)'
+    const sql2 = 'INSERT INTO student (user_id,roll_no, reg_no, fname,admission_date)values(?,?,?,?,?)'
 
     bcrypt.hash(password, SaltRounds, (err, hashedPassword) => {
         if (hashedPassword) {
@@ -68,7 +68,7 @@ router.post('/StudentReg', (req, res) => {
 
             const user_id = userResult.insertId
 
-            pool.query(sql2, [user_id, roll_no, reg_no, fname], (err, studentResult) => {
+            pool.query(sql2, [user_id, roll_no, reg_no, fname,admission_date], (err, studentResult) => {
                 res.send(result.createResult(err, studentResult))
             })
         })
@@ -77,6 +77,22 @@ router.post('/StudentReg', (req, res) => {
 
     
 })
+
+
+
+router.post('/Update', (req, res) => {
+    const { class_id, teacher_id} = req.body
+
+    const sql2 = 'update student set teacher_id=? where class_id= ?'
+
+            pool.query(sql2, [ teacher_id,class_id], (err, studentResult) => {
+                res.send(result.createResult(err, studentResult))
+            })
+        })
+    
+
+
+
 
 
 
