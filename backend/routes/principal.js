@@ -42,7 +42,7 @@ router.post('/signin', (req, res) => {
 
 
 router.get('/getAll',(req,res)=>{
-    const sql="SELECT * FROM employee where role='principal"
+    const sql="SELECT * FROM employee where role='principal'"
     pool.query(sql,(err,data)=>{
         res.send(result.createResult(err,data))
     })

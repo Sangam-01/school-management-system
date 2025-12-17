@@ -60,9 +60,12 @@ router.post('/signup', (req, res) => {
 })
 
 
-router.get('/', (req, res) => {
-    const sql = `SELECT * FROM users WHERE role='teacher'`
-    pool.query(sql, (err, data) => {
+// /user/all
+// /user/all?q=teacher (student, principle, teacher)
+router.get('/all', (req, res) => {
+    const {q} = req.query
+    const sql = `SELECT * FROM users WHERE role=?`
+    pool.query(sql, [q],(err, data) => {
         res.send(result.createResult(err, data))
     })
 })

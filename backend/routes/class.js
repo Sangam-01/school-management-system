@@ -27,10 +27,19 @@ router.post('/Addclass',(req,res) => {
 
 })
 
-    
-
-
 
 })
+
+router.post('/Update', (req, res) => {
+    const {class_teacher_id , class_id } = req.body
+
+    const sql2 = 'update class set class_teacher_id=? where class_id =?'
+
+            pool.query(sql2, [class_teacher_id,class_id], (err, studentResult) => {
+                res.send(result.createResult(err, studentResult))
+            })
+        })
+
+
 
 module.exports = router

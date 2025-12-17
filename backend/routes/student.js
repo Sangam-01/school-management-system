@@ -48,12 +48,12 @@ router.get('/getAll',(req,res)=>{
 })
 
 router.post('/StudentReg', (req, res) => {
-    const { roll_no, reg_no, fname} = req.body
+    const { roll_no, reg_no, fname,} = req.body
 
-    const { username, password ,role} = req.body 
+    const { username, password ,role,admission_date} = req.body 
 
     const sql1 = 'INSERT INTO users (username, password ,role)values(?,?,?)'
-    const sql2 = 'INSERT INTO student (user_id,roll_no, reg_no, fname)values(?,?,?,?)'
+    const sql2 = 'INSERT INTO student (user_id,roll_no, reg_no, fname,admission_date)values(?,?,?,?,?)'
 
     bcrypt.hash(password, SaltRounds, (err, hashedPassword) => {
         if (hashedPassword) {
@@ -68,7 +68,7 @@ router.post('/StudentReg', (req, res) => {
 
             const user_id = userResult.insertId
 
-            pool.query(sql2, [user_id, roll_no, reg_no, fname], (err, studentResult) => {
+            pool.query(sql2, [user_id, roll_no, reg_no, fname,admission_date], (err, studentResult) => {
                 res.send(result.createResult(err, studentResult))
             })
         })
@@ -99,58 +99,58 @@ router.get('/:student_id/attendance', async (req, res) => {
     }
 
     try {
-        const [rows] = await pool.query(sql, params);
-        res.status(200).json(rows);
+        pool.query(sql, params,(err,data));
+        res.send(result.createResult(err, data))
     } catch (err) {
         console.error(err);
-        res.status(500).send('Error fetching attendance data.');
+           res.send(result.createResult("Error fetching attendance data."))
     }
 });
 //////////////////
 
 
-// POST /attendance/students - Mark attendance (Admin/Teacher only)
-app.post('/attendance/students', authorizeTeacherOrAdmin, async (req, res) => {
-    const { student_id, date, status } = req.body; // e.g., [{ student_id: 1, date: '2025-12-16', status: 'Present' }]
+// // POST /attendance/students - Mark attendance (Admin/Teacher only)
+// app.post('/attendance/students', authorizeTeacherOrAdmin, async (req, res) => {
+//     const { student_id, date, status } = req.body; // e.g., [{ student_id: 1, date: '2025-12-16', status: 'Present' }]
     
-    // Simple validation for a single record
-    if (!student_id || !date || !status) {
-        return res.status(400).send('Missing required fields: student_id, date, or status.');
-    }
+//     // Simple validation for a single record
+//     if (!student_id || !date || !status) {
+//         return res.status(400).send('Missing required fields: student_id, date, or status.');
+//     }
 
-    const sql = 'INSERT INTO attendance_student (student_id, date, status) VALUES (?, ?, ?)';
+//     const sql = 'INSERT INTO attendance_student (student_id, date, status) VALUES (?, ?, ?)';
     
-    try {
-        const [result] = await db.query(sql, [student_id, date, status]);
-        res.status(201).json({ message: 'Attendance recorded successfully', id: result.insertId });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Error recording attendance.');
-    }
-});
+//     try {
+//         const [result] = await db.query(sql, [student_id, date, status]);
+//         res.status(201).json({ message: 'Attendance recorded successfully', id: result.insertId });
+//     } catch (err) {
+//         console.error(err);
+//         res.status(500).send('Error recording attendance.');
+//     }
+// });
 
-// PUT /attendance/students/:attendance_id - Update attendance (Admin/Teacher only)
-app.put('/attendance/students/:attendance_id', authorizeTeacherOrAdmin, async (req, res) => {
-    const { attendance_id } = req.params;
-    const { status } = req.body;
+// // PUT /attendance/students/:attendance_id - Update attendance (Admin/Teacher only)
+// app.put('/attendance/students/:attendance_id', authorizeTeacherOrAdmin, async (req, res) => {
+//     const { attendance_id } = req.params;
+//     const { status } = req.body;
 
-    if (!status) {
-        return res.status(400).send('Missing required field: status.');
-    }
+//     if (!status) {
+//         return res.status(400).send('Missing required field: status.');
+//     }
 
-    const sql = 'UPDATE attendance_student SET status = ? WHERE attendance_id = ?';
+//     const sql = 'UPDATE attendance_student SET status = ? WHERE attendance_id = ?';
     
-    try {
-        const [result] = await db.query(sql, [status, attendance_id]);
-        if (result.affectedRows === 0) {
-            return res.status(404).send('Attendance record not found.');
-        }
-        res.status(200).json({ message: 'Attendance updated successfully' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Error updating attendance.');
-    }
-});
+//     try {
+//         const [result] = await db.query(sql, [status, attendance_id]);
+//         if (result.affectedRows === 0) {
+//             return res.status(404).send('Attendance record not found.');
+//         }
+//         res.status(200).json({ message: 'Attendance updated successfully' });
+//     } catch (err) {
+//         console.error(err);
+//         res.status(500).send('Error updating attendance.');
+//     }
+// });
 
 
 
@@ -186,8 +186,8 @@ app.put('/attendance/students/:attendance_id', authorizeTeacherOrAdmin, async (r
 // POST /students/:student_id/upload/image - Upload student image
 router.post(
     '/:student_id/upload/image',
-    authorizeTeacherOrAdmin,
-    upload.single('profile_image'),
+    
+    // upload.single('profile_image'),
     async (req, res) => {
 
         const { student_id } = req.params;
@@ -215,7 +215,7 @@ router.post(
 
             res.status(200).json({
                 message: 'Profile image updated successfully',
-                image_path: `/uploads/${imagePath}`
+               
             });
 
         } catch (err) {
@@ -229,7 +229,7 @@ router.post(
 
 
 // PATCH /students/:student_id/profile - Update contact info
-router.patch('/:student_id/profile', authorizeStudent, async (req, res) => {
+router.patch('/:student_id/profile', (req, res) => {
     const { student_id } = req.params;
     const { email, address, mobile } = req.body;
 
@@ -252,7 +252,7 @@ router.patch('/:student_id/profile', authorizeStudent, async (req, res) => {
     }
 
     if (updateFields.length === 0) {
-        return res.status(400).send('No valid fields provided for update.');
+            res.send(result.createResult('No valid fields provided for update.'));
     }
 
     const sql = `
@@ -264,10 +264,11 @@ router.patch('/:student_id/profile', authorizeStudent, async (req, res) => {
     updateValues.push(student_id);
 
     try {
-        const [result] = await pool.query(sql, updateValues);
+        
+        pool.query(sql, updateValues);
 
         if (result.affectedRows === 0) {
-            return res.status(404).send('Student not found or no changes made.');
+            return     res.send(result.createResult('Student not found or no changes made.'));
         }
 
         res.status(200).json({
@@ -276,24 +277,25 @@ router.patch('/:student_id/profile', authorizeStudent, async (req, res) => {
 
     } catch (err) {
         console.error(err);
-        res.status(500).send('Error updating profile.');
+        res.send(result.createResult('Error updating profile.'));
     }
 });
 
 
-
+// NOT completed
 // PUT /students/:student_id/change-password - Change password specific to student
-router.put('/:student_id/change-password', authorizeStudent, async (req, res) => {
+router.put('/:student_id/change-password',async (req, res) => {
     const { student_id } = req.params;
     const { old_password, new_password } = req.body;
 
     if (!old_password || !new_password) {
-        return res.status(400).send('Missing old_password or new_password.');
+            res.send(result.createResult("Missing old_password or new_password."));
     }
 
     try {
         // 1. Get the user_id associated with the student_id
-        const [studentRows] = await pool.query(
+  
+        pool.query(
             'SELECT user_id FROM student WHERE student_id = ?',
             [student_id]
         );
@@ -333,7 +335,7 @@ router.put('/:student_id/change-password', authorizeStudent, async (req, res) =>
 
 
 // GET /students/:student_id/assignments - View assigned homework/assignments
-router.get('/:student_id/assignments', authorizeStudent, async (req, res) => {
+router.get('/:student_id/assignments', async (req, res) => {
     const { student_id } = req.params;
 
     // This query finds all assignments posted for the student's current subjects
@@ -359,7 +361,7 @@ router.get('/:student_id/assignments', authorizeStudent, async (req, res) => {
     }
 });
 // GET /students/:student_id/materials - Access study materials
-router.get('/:student_id/materials', authorizeStudent, async (req, res) => {
+router.get('/:student_id/materials', async (req, res) => {
     const { student_id } = req.params;
 
     const sql = `
@@ -391,7 +393,7 @@ router.get('/:student_id/materials', authorizeStudent, async (req, res) => {
 
 
 // POST /students/:student_id/leave-request - Submit a leave request
-router.post('/:student_id/leave-request', authorizeStudent, async (req, res) => {
+router.post('/:student_id/leave-request', async (req, res) => {
     const { student_id } = req.params;
     const { start_date, end_date, reason } = req.body;
 
@@ -425,6 +427,22 @@ router.post('/:student_id/leave-request', authorizeStudent, async (req, res) => 
         );
     }
 });
+
+
+
+router.post('/Update', (req, res) => {
+    const { class_id, teacher_id} = req.body
+
+    const sql2 = 'update student set teacher_id=? where class_id= ?'
+
+            pool.query(sql2, [ teacher_id,class_id], (err, studentResult) => {
+                res.send(result.createResult(err, studentResult))
+            })
+        })
+    
+
+
+
 
 
 
