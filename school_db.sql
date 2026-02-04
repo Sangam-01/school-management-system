@@ -1,4 +1,4 @@
-DROP DATABASE IF EXISTS School_Managment_db;
+DROP DATABASE IF EXISTS c;
 CREATE DATABASE School_Managment_db;
 USE School_Managment_db;
 

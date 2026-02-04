@@ -4,10 +4,15 @@ USE School_Managment_db;
 
 CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY ,
-    username VARCHAR(50) UNIQUE,
-    password VARCHAR(255),
+   
+    username VARCHAR(50) UNIQUE NOT NULL,
+password VARCHAR(255) NOT NULL,
+
     role ENUM('admin','teacher','student','accountant','principal') NOT NULL,
     status ENUM('active','inactive') DEFAULT 'active'
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
 )AUTO_INCREMENT = 1001;
 
 CREATE TABLE employee (
@@ -25,13 +30,18 @@ CREATE TABLE employee (
     mobile VARCHAR(15),
     email VARCHAR(100),
     FOREIGN KEY(user_id) REFERENCES users(user_id)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
 );
 
 
 CREATE TABLE student (
     student_id INT AUTO_INCREMENT PRIMARY KEY,
+
     user_id INT,
-    roll_no INT,
+    roll_no INT UNIQUE (class_id, roll_no)
+,
     reg_no VARCHAR(20) UNIQUE, 
     fname VARCHAR(20),
     mname VARCHAR(20),
@@ -41,11 +51,14 @@ CREATE TABLE student (
     email VARCHAR(50),
     address VARCHAR(200),
     dob DATE,
-    class_id INT,
+    class_id INT NOT NULL,
     admission_date DATE,
     gender VARCHAR(10),
     mobile VARCHAR(15),
     FOREIGN KEY(user_id) REFERENCES users(user_id)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
 );
 
 
@@ -55,6 +68,9 @@ CREATE TABLE class (
     section VARCHAR(10),
     class_teacher_id INT,
     FOREIGN KEY(class_teacher_id) REFERENCES employee(employee_id)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
 );
 
 
@@ -65,6 +81,9 @@ CREATE TABLE subject (
     teacher_id INT,
     FOREIGN KEY(class_id) REFERENCES class(class_id),
     FOREIGN KEY(teacher_id) REFERENCES employee(employee_id)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
 );
 
 
@@ -106,6 +125,9 @@ CREATE TABLE fees (
     status ENUM('Paid','Pending','Overdue') DEFAULT 'Pending',
     FOREIGN KEY(student_id) REFERENCES student(student_id),
     FOREIGN KEY(category_id) REFERENCES fee_category(category_id)
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
 );
 
 
@@ -116,12 +138,18 @@ CREATE TABLE marks (
     marks_obtained DECIMAL(5,2),
     max_marks DECIMAL(5,2),
     grade VARCHAR(5),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+
     FOREIGN KEY(student_id) REFERENCES student(student_id),
     FOREIGN KEY(subject_id) REFERENCES subject(subject_id)
 );
 
 
 
+CREATE INDEX idx_student_user ON student(user_id);
+CREATE INDEX idx_employee_user ON employee(user_id);
+CREATE INDEX idx_fees_student ON fees(student_id);
 
 
 
