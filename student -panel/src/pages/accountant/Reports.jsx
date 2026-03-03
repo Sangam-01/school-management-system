@@ -49,16 +49,9 @@ const Reports = () => {
   /* ================= CLASS WISE ================= */
   const fetchClassWiseReport = async () => {
     try {
-      const res = await api.get('/accountant/reports/class-wise')
-      if (res.data.status === 'success') {
-        // normalize keys for UI + charts
-        const normalized = res.data.data.map(r => ({
-          ...r,
-          collected: r.total_collected,
-          pending: r.total_pending,
-          overdue: 0 // backend does not provide overdue
-        }))
-        setClassWiseData(normalized)
+      const response = await api.get('/accountant/reports/class-wise')
+      if (response.data.status === 'success') {
+        setClassWiseData(response.data.data)
       }
     } catch {
       toast.error('Failed to load class-wise report')
@@ -70,26 +63,12 @@ const Reports = () => {
     try {
       setLoading(true)
       setError(null)
-
       let response
 
       if (reportType === 'monthly') {
-        response = await api.get(`/accountant/reports/monthly?year=${year}`)
-
-        if (response.data.status === 'success') {
-          // aggregate monthly array → summary object
-          const rows = response.data.data
-          const totalCollected = rows.reduce(
-            (sum, r) => sum + Number(r.total_collected || 0),
-            0
-          )
-
-          setReportData({
-            total_assigned: 0, // backend does not provide
-            total_collected: totalCollected,
-            total_pending: 0 // backend does not provide
-          })
-        }
+        response = await api.get(
+          `/accountant/reports/monthly?month=${month}&year=${year}`
+        )
       }
 
       if (reportType === 'daterange') {
@@ -101,14 +80,15 @@ const Reports = () => {
         response = await api.get(
           `/accountant/reports/date-range?start_date=${startDate}&end_date=${endDate}`
         )
-
-        if (response.data.status === 'success') {
-          setReportData(response.data.data)
-        }
       }
 
-      toast.success('Report generated')
-    } catch {
+      if (response.data.status === 'success') {
+        setReportData(response.data.data)
+        toast.success('Report generated')
+      } else {
+        setError(response.data.message)
+      }
+    } catch (err) {
       setError('Failed to generate report')
       toast.error('Failed to generate report')
     } finally {
@@ -118,13 +98,14 @@ const Reports = () => {
 
   const years = Array.from({ length: 5 }, (_, i) => year - i)
 
-  /* ================= CHART DATA ================= */
+  /* ================= CHART DATA (UNCHANGED STRUCTURE) ================= */
   const getChartData = () => {
-    return classWiseData.map(item => ({
+    if (!classWiseData.length) return []
+    return classWiseData.map((item) => ({
       name: `${item.class_level}-${item.division}`,
-      Collected: Number(item.collected),
-      Pending: Number(item.pending),
-      Overdue: Number(item.overdue)
+      Collected: Number(item.collected || 0),
+      Pending: Number(item.pending || 0),
+      Overdue: Number(item.overdue || 0) // safe fallback
     }))
   }
 
@@ -228,68 +209,139 @@ const Reports = () => {
           </Grid>
         </Grid>
 
+        {/* ================= REPORT RESULT ================= */}
         {loading && <LoadingSpinner message="Generating report..." />}
         {error && <ErrorMessage error={error} />}
 
         {reportData && reportType === 'monthly' && (
           <Box sx={{ mt: 3 }}>
-            <Table>
-              <TableBody>
-                <TableRow>
-                  <TableCell>{formatCurrency(reportData.total_assigned)}</TableCell>
-                  <TableCell>
-                    <Typography color="success.main" fontWeight={600}>
-                      {formatCurrency(reportData.total_collected)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography color="error.main" fontWeight={600}>
-                      {formatCurrency(reportData.total_pending)}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Total Assigned</TableCell>
+                    <TableCell>Total Collected</TableCell>
+                    <TableCell>Total Pending</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>
+                      {formatCurrency(reportData.total_assigned)}
+                    </TableCell>
+                    <TableCell>
+                      <Typography color="success.main" fontWeight={600}>
+                        {formatCurrency(reportData.total_collected)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography color="error.main" fontWeight={600}>
+                        {formatCurrency(reportData.total_pending)}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
           </Box>
         )}
 
         {reportData && reportType === 'daterange' && (
           <Box sx={{ mt: 3 }}>
-            <Table>
-              <TableBody>
-                {reportData.map((row, i) => (
-                  <TableRow key={i}>
-                    <TableCell>{row.payment_date}</TableCell>
-                    <TableCell align="center">{row.transactions}</TableCell>
-                    <TableCell align="right">
-                      {formatCurrency(row.total_collected)}
-                    </TableCell>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Date</TableCell>
+                    <TableCell align="center">Transactions</TableCell>
+                    <TableCell align="right">Collected</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {reportData.map((row, i) => (
+                    <TableRow key={i}>
+                      <TableCell>{row.payment_date}</TableCell>
+                      <TableCell align="center">
+                        {row.transactions}
+                      </TableCell>
+                      <TableCell align="right">
+                        <Typography color="success.main" fontWeight={600}>
+                          {formatCurrency(row.total_collected)}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           </Box>
         )}
       </Paper>
 
       {/* ================= CLASS WISE ================= */}
       <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" fontWeight={600} gutterBottom>
-          <BarChart /> Class-wise Fee Summary
+        <Typography
+          variant="h6"
+          fontWeight={600}
+          gutterBottom
+          sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+        >
+          <BarChart />
+          Class-wise Fee Summary
         </Typography>
 
-        <ResponsiveContainer width="100%" height={300}>
-          <RechartsBar data={getChartData()}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip formatter={(v) => formatCurrency(v)} />
-            <Legend />
-            <Bar dataKey="Collected" fill="#4caf50" />
-            <Bar dataKey="Pending" fill="#ff9800" />
-            <Bar dataKey="Overdue" fill="#f44336" />
-          </RechartsBar>
-        </ResponsiveContainer>
+        {classWiseData.length > 0 ? (
+          <>
+            {/* 🔒 SAME GRAPH – NOT CHANGED */}
+            <ResponsiveContainer width="100%" height={300}>
+              <RechartsBar data={getChartData()}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip formatter={(v) => formatCurrency(v)} />
+                <Legend />
+                <Bar dataKey="Collected" fill="#4caf50" />
+                <Bar dataKey="Pending" fill="#ff9800" />
+                <Bar dataKey="Overdue" fill="#f44336" />
+              </RechartsBar>
+            </ResponsiveContainer>
+
+            <TableContainer sx={{ mt: 3 }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Class</TableCell>
+                    <TableCell align="center">Students</TableCell>
+                    <TableCell align="right">Collected</TableCell>
+                    <TableCell align="right">Pending</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {classWiseData.map((row, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        {row.class_level}-{row.division}
+                      </TableCell>
+                      <TableCell align="center">
+                        {row.total_students}
+                      </TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(row.collected)}
+                      </TableCell>
+                      <TableCell align="right">
+                        {formatCurrency(row.pending)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
+        ) : (
+          <Typography color="text.secondary">
+            No class-wise data available
+          </Typography>
+        )}
       </Paper>
     </Box>
   )

@@ -1,211 +1,410 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import {
-  Box, Grid, Paper, Typography, TextField, Button, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Chip, Avatar,
-  MenuItem, Select, FormControl, InputLabel, CircularProgress, Alert
+  Paper, Typography, Box, Button, Grid, TextField, MenuItem, Card,
+  CardContent, Table, TableBody, TableCell, TableContainer, TableHead,
+  TableRow, Dialog, DialogTitle, DialogContent, DialogActions, Chip, Alert
 } from '@mui/material'
-import { Save, Assessment } from '@mui/icons-material'
+import { Assessment, Add, Save, EmojiEvents } from '@mui/icons-material'
+import { useForm } from 'react-hook-form'
 import api from '../../api/axios'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
+import ErrorMessage from '../../components/common/ErrorMessage'
 import toast from 'react-hot-toast'
 
-/* grade colour map */
-const GRADE_COLOR = { 'A+':'#10b981','A':'#3b82f6','B':'#8b5cf6','C':'#f59e0b','D':'#f97316','F':'#ef4444' }
-
-function calcGrade(obtained, max) {
-  if (!max || max === 0) return '—'
-  const p = (obtained / max) * 100
-  if (p >= 90) return 'A+'
-  if (p >= 80) return 'A'
-  if (p >= 70) return 'B'
-  if (p >= 60) return 'C'
-  if (p >= 40) return 'D'
-  return 'F'
-}
-
 const TeacherMarks = () => {
-  const [classes, setClasses]     = useState([])
-  const [subjects, setSubjects]   = useState([])
-  const [selectedClass, setClass] = useState('')
-  const [selectedSubject, setSubject] = useState('')
-  const [examName, setExamName]   = useState('')
-  const [maxMarks, setMaxMarks]   = useState('')
-  const [students, setStudents]   = useState([])
-  const [marks, setMarks]         = useState({}) // enrollment_id → number|''
-  const [loading, setLoading]     = useState(true)
-  const [saving, setSaving]       = useState(false)
+  const [subjects, setSubjects] = useState([])
+  const [students, setStudents] = useState([])
+  const [selectedSubject, setSelectedSubject] = useState('')
+  const [examName, setExamName] = useState('')
+  const [maxMarks, setMaxMarks] = useState('')
+  const [marksData, setMarksData] = useState({})
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
 
-  // load classes + subjects once
+  const { register, handleSubmit, reset } = useForm()
+
   useEffect(() => {
-    Promise.all([
-      api.get('/teacher/classes'),
-      api.get('/teacher/subjects')
-    ]).then(([cR, sR]) => {
-      if (cR.data.status === 'success') { setClasses(cR.data.data); if (cR.data.data.length) setClass(cR.data.data[0].class_id) }
-      if (sR.data.status === 'success') setSubjects(sR.data.data)
-    }).catch(() => toast.error('Failed to load'))
-    .finally(() => setLoading(false))
+    fetchSubjects()
   }, [])
 
-  // filter subjects by selected class
-  const filteredSubjects = useMemo(() => subjects.filter(s => s.class_id === selectedClass || s.class_id === Number(selectedClass)), [subjects, selectedClass])
+  const fetchSubjects = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await api.get('/teacher/subjects')
 
-  // when class changes → reset subject, load students
-  useEffect(() => {
-    if (!selectedClass) return
-    setSubject('')
-    api.get('/teacher/class/students', { params: { class_id: selectedClass } })
-      .then(r => { if (r.data.status === 'success') { setStudents(r.data.data); const m = {}; r.data.data.forEach(s => m[s.enrollment_id] = ''); setMarks(m) } })
-      .catch(() => toast.error('Failed to load students'))
-  }, [selectedClass])
-
-  // when subject changes → auto-set first as default
-  useEffect(() => { if (filteredSubjects.length && !selectedSubject) setSubject(filteredSubjects[0].subject_id) }, [filteredSubjects])
-
-  const handleMarkChange = (eid, val) => {
-    // allow only numbers ≤ maxMarks
-    if (val !== '' && (isNaN(val) || Number(val) < 0)) return
-    if (maxMarks && Number(val) > Number(maxMarks)) return
-    setMarks(prev => ({ ...prev, [eid]: val }))
+      if (response.data.status === 'success') {
+        setSubjects(response.data.data)
+      } else {
+        setError(response.data.message)
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load subjects')
+      toast.error('Failed to load subjects')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleSave = async () => {
-    if (!selectedSubject) return toast.error('Select a subject')
-    if (!examName.trim()) return toast.error('Enter exam name')
-    if (!maxMarks || Number(maxMarks) <= 0) return toast.error('Enter max marks')
-
-    const marksArr = students.map(s => ({
-      enrollment_id: s.enrollment_id,
-      marks_obtained: marks[s.enrollment_id] === '' ? 0 : Number(marks[s.enrollment_id])
-    }))
+  const handleSubjectChange = async (subjectId) => {
+    setSelectedSubject(subjectId)
+    
+    // Find the class_id for this subject
+    const subject = subjects.find(s => s.subject_id === parseInt(subjectId))
+    if (!subject) return
 
     try {
-      setSaving(true)
-      const res = await api.post('/teacher/marks/add', {
-        subject_id: Number(selectedSubject),
-        exam_name: examName.trim(),
-        max_marks: Number(maxMarks),
-        marks: marksArr
-      })
-      if (res.data.status === 'success') toast.success('Marks saved successfully')
-      else toast.error(res.data.message)
-    } catch (e) { toast.error(e.response?.data?.message || 'Failed to save') }
-    finally { setSaving(false) }
+      const response = await api.get('/teacher/class/students')
+      if (response.data.status === 'success') {
+        setStudents(response.data.data)
+        // Initialize marks data
+        const initialMarks = {}
+        response.data.data.forEach(student => {
+          initialMarks[student.student_id] = ''
+        })
+        setMarksData(initialMarks)
+      }
+    } catch (err) {
+      toast.error('Failed to load students')
+    }
   }
 
-  if (loading) return <LoadingSpinner message="Loading…" />
+  const handleMarksChange = (studentId, value) => {
+    setMarksData(prev => ({
+      ...prev,
+      [studentId]: value
+    }))
+  }
+
+  const calculateGrade = (obtained, max) => {
+    if (!obtained || !max) return '-'
+    const percentage = (parseFloat(obtained) / parseFloat(max)) * 100
+    if (percentage >= 90) return 'A+'
+    if (percentage >= 80) return 'A'
+    if (percentage >= 70) return 'B'
+    if (percentage >= 60) return 'C'
+    if (percentage >= 40) return 'D'
+    return 'F'
+  }
+
+  const getGradeColor = (grade) => {
+    switch (grade) {
+      case 'A+':
+      case 'A': return 'success'
+      case 'B': return 'primary'
+      case 'C': return 'warning'
+      case 'D': return 'error'
+      case 'F': return 'error'
+      default: return 'default'
+    }
+  }
+
+  const handleOpenDialog = () => {
+    if (!selectedSubject) {
+      toast.error('Please select a subject first')
+      return
+    }
+    if (students.length === 0) {
+      toast.error('No students found')
+      return
+    }
+    setDialogOpen(true)
+  }
+
+  const handleSubmitMarks = async () => {
+    if (!examName || !maxMarks) {
+      toast.error('Please enter exam name and max marks')
+      return
+    }
+
+    // Validate marks
+    const marksArray = Object.entries(marksData)
+      .filter(([_, marks]) => marks !== '')
+      .map(([studentId, marks]) => ({
+        student_id: parseInt(studentId),
+        marks_obtained: parseFloat(marks)
+      }))
+
+    if (marksArray.length === 0) {
+      toast.error('Please enter marks for at least one student')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const response = await api.post('/teacher/marks/add', {
+        subject_id: parseInt(selectedSubject),
+        exam_name: examName,
+        max_marks: parseFloat(maxMarks),
+        marks: marksArray
+      })
+
+      if (response.data.status === 'success') {
+        toast.success('Marks submitted successfully!')
+        setDialogOpen(false)
+        setExamName('')
+        setMaxMarks('')
+        setMarksData({})
+      } else {
+        toast.error(response.data.message)
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to submit marks')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) return <LoadingSpinner message="Loading subjects..." />
+  if (error) return <ErrorMessage error={error} onRetry={fetchSubjects} />
+
+  const subject = subjects.find(s => s.subject_id === parseInt(selectedSubject))
 
   return (
-    <Box>
+    <Box className="fade-in">
       {/* Header */}
-      <Box sx={{ background:'linear-gradient(135deg,#1e1b4b,#312e81)', borderRadius:3, p:'24px 28px', mb:3, color:'#fff' }}>
-        <Typography variant="h4" fontWeight={700}>Add Marks</Typography>
-        <Typography variant="body2" sx={{ opacity:0.7, mt:0.3 }}>Select class, subject & exam · Enter marks · Auto-grade calculated</Typography>
+      <Box sx={{
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        borderRadius: 3,
+        p: 3,
+        mb: 3,
+        color: 'white'
+      }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box>
+            <Typography variant="h4" fontWeight={600} gutterBottom>
+              Marks Management
+            </Typography>
+            <Typography variant="body1" sx={{ opacity: 0.9 }}>
+              Enter and manage student examination marks
+            </Typography>
+          </Box>
+          <Assessment sx={{ fontSize: 60, opacity: 0.3 }} />
+        </Box>
       </Box>
 
-      {/* Filter row */}
-      <Paper sx={{ p:2.5, borderRadius:3, mb:3, boxShadow:'0 2px 12px rgba(0,0,0,0.08)' }}>
-        <Grid container spacing={2}>
-          <Grid item xs={12} sm={3}>
-            <FormControl fullWidth>
-              <InputLabel>Class</InputLabel>
-              <Select value={selectedClass} label="Class" onChange={e => setClass(e.target.value)}>
-                {classes.map(c => <MenuItem key={c.class_id} value={c.class_id}>Class {c.class_level}-{c.division}</MenuItem>)}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={3}>
-            <FormControl fullWidth>
-              <InputLabel>Subject</InputLabel>
-              <Select value={selectedSubject} label="Subject" onChange={e => setSubject(e.target.value)}>
-                {filteredSubjects.map(s => <MenuItem key={s.subject_id} value={s.subject_id}>{s.subject_name}</MenuItem>)}
-              </Select>
-            </FormControl>
-          </Grid>
-          <Grid item xs={12} sm={3}>
-            <TextField fullWidth label="Exam Name" value={examName} onChange={e => setExamName(e.target.value)} placeholder="e.g. Mid-Term" />
-          </Grid>
-          <Grid item xs={12} sm={3}>
-            <TextField fullWidth label="Max Marks" type="number" value={maxMarks} onChange={e => setMaxMarks(e.target.value)} inputProps={{ min:1 }} />
-          </Grid>
+      {/* Subject Selection */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={8}>
+          <Paper sx={{ p: 3, boxShadow: '0 4px 20px rgba(0,0,0,0.1)', borderRadius: 2 }}>
+            <Typography variant="h6" gutterBottom fontWeight={600}>
+              Select Subject
+            </Typography>
+            <TextField
+              select
+              fullWidth
+              label="Choose Subject"
+              value={selectedSubject}
+              onChange={(e) => handleSubjectChange(e.target.value)}
+              sx={{ mt: 2 }}
+            >
+              <MenuItem value="">Select a subject</MenuItem>
+              {subjects.map((sub) => (
+                <MenuItem key={sub.subject_id} value={sub.subject_id}>
+                  {sub.subject_name} - {sub.class_name} {sub.section}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Paper>
         </Grid>
-      </Paper>
 
-      {/* quick-fill helpers */}
-      {students.length > 0 && maxMarks && (
-        <Box sx={{ display:'flex', gap:1.5, mb:2, flexWrap:'wrap' }}>
-          <Button size="small" variant="outlined" onClick={() => { const m = {}; students.forEach(s => m[s.enrollment_id] = maxMarks); setMarks(m) }}>Fill All → {maxMarks}</Button>
-          <Button size="small" variant="outlined" onClick={() => { const m = {}; students.forEach(s => m[s.enrollment_id] = '0'); setMarks(m) }}>Fill All → 0</Button>
-          <Button size="small" variant="outlined" onClick={() => { const m = {}; students.forEach(s => m[s.enrollment_id] = ''); setMarks(m) }}>Clear All</Button>
-        </Box>
+        <Grid item xs={12} md={4}>
+          <Card sx={{
+            background: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+            color: 'white',
+            boxShadow: '0 4px 20px rgba(56, 239, 125, 0.3)',
+            height: '100%'
+          }}>
+            <CardContent>
+              <EmojiEvents sx={{ fontSize: 40, mb: 1 }} />
+              <Typography variant="h4" fontWeight={600}>
+                {students.length}
+              </Typography>
+              <Typography variant="body2">
+                Students Ready
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Selected Subject Info */}
+      {selectedSubject && subject && (
+        <>
+          <Alert severity="success" sx={{ mb: 3 }}>
+            <strong>Selected:</strong> {subject.subject_name} for {subject.class_name} - {subject.section}
+          </Alert>
+
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<Add />}
+              onClick={handleOpenDialog}
+              sx={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                px: 4
+              }}
+            >
+              Enter Marks for Exam
+            </Button>
+          </Box>
+        </>
       )}
 
-      {/* Table */}
-      <Paper sx={{ borderRadius:3, boxShadow:'0 2px 12px rgba(0,0,0,0.08)', overflow:'hidden' }}>
-        <TableContainer>
-          <Table stickyHeader>
-            <TableHead>
-              <TableRow sx={{ bgcolor:'#f1f5f9' }}>
-                <TableCell sx={{ fontWeight:600, width:50 }}>#</TableCell>
-                <TableCell sx={{ fontWeight:600 }}>Student</TableCell>
-                <TableCell sx={{ fontWeight:600, width:90 }}>Roll</TableCell>
-                <TableCell sx={{ fontWeight:600, width:130 }}>Marks {maxMarks ? `/ ${maxMarks}` : ''}</TableCell>
-                <TableCell sx={{ fontWeight:600, width:100 }}>Grade</TableCell>
-                <TableCell sx={{ fontWeight:600, width:90 }}>%</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {students.map((s, i) => {
-                const val = marks[s.enrollment_id]
-                const grade = maxMarks ? calcGrade(Number(val) || 0, Number(maxMarks)) : '—'
-                const pct = maxMarks ? ((Number(val) || 0) / Number(maxMarks) * 100).toFixed(1) : '—'
-                return (
-                  <TableRow key={s.enrollment_id} sx={{ '&:hover':{ bgcolor:'#f8fafc' } }}>
-                    <TableCell>{i + 1}</TableCell>
+      {/* Students Table */}
+      {selectedSubject && students.length > 0 && (
+        <Paper sx={{
+          p: 3,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+          borderRadius: 3
+        }}>
+          <Typography variant="h6" gutterBottom fontWeight={600}>
+            Student List - {subject?.class_name} {subject?.section}
+          </Typography>
+
+          <TableContainer sx={{ mt: 2 }}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ bgcolor: '#f5f5f5' }}>
+                  <TableCell><strong>Roll No</strong></TableCell>
+                  <TableCell><strong>Student Name</strong></TableCell>
+                  <TableCell><strong>Reg No</strong></TableCell>
+                  <TableCell><strong>Gender</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {students.map((student) => (
+                  <TableRow key={student.student_id} hover>
                     <TableCell>
-                      <Box sx={{ display:'flex', alignItems:'center', gap:1.2 }}>
-                        <Avatar sx={{ width:32, height:32, bgcolor:'#6366f1', fontSize:13 }}>{s.fname?.[0]}{s.lname?.[0]}</Avatar>
-                        <Typography variant="body2" fontWeight={600}>{s.fname} {s.lname}</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>{s.roll_no}</TableCell>
-                    <TableCell>
-                      <TextField
-                        size="small"
-                        type="number"
-                        value={val}
-                        onChange={e => handleMarkChange(s.enrollment_id, e.target.value)}
-                        inputProps={{ min:0, max: maxMarks || undefined }}
-                        sx={{ width:100 }}
-                      />
+                      <Typography fontWeight={600}>
+                        {student.roll_no}
+                      </Typography>
                     </TableCell>
                     <TableCell>
-                      {grade !== '—' && (
-                        <Chip label={grade} size="small" sx={{ bgcolor: GRADE_COLOR[grade] || '#9ca3af', color:'#fff', fontWeight:700, minWidth:42 }} />
-                      )}
+                      <Typography variant="body2" fontWeight={600}>
+                        {student.fname} {student.mname} {student.lname}
+                      </Typography>
                     </TableCell>
+                    <TableCell>{student.reg_no}</TableCell>
                     <TableCell>
-                      <Typography variant="body2" fontWeight={600} color={Number(pct) >= 40 ? 'success.main' : 'error.main'}>{pct === '—' ? '—' : `${pct}%`}</Typography>
+                      <Chip label={student.gender} size="small" variant="outlined" />
                     </TableCell>
                   </TableRow>
-                )
-              })}
-              {!students.length && <TableRow><TableCell colSpan={6} sx={{ textAlign:'center', py:4, color:'text.secondary' }}>No students</TableCell></TableRow>}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
-
-      {/* Save */}
-      {students.length > 0 && (
-        <Box sx={{ mt:3, display:'flex', justifyContent:'flex-end' }}>
-          <Button variant="contained" startIcon={<Save />} onClick={handleSave} disabled={saving} sx={{
-            background:'linear-gradient(135deg,#6366f1,#8b5cf6)', color:'#fff', fontWeight:600, px:4, py:1.2
-          }}>
-            {saving ? 'Saving…' : 'Save Marks'}
-          </Button>
-        </Box>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
       )}
+
+      {/* Marks Entry Dialog */}
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ bgcolor: '#667eea', color: 'white' }}>
+          <Typography variant="h6" fontWeight={600}>
+            Enter Examination Marks
+          </Typography>
+          <Typography variant="body2">
+            {subject?.subject_name} - {subject?.class_name} {subject?.section}
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Exam Name"
+                value={examName}
+                onChange={(e) => setExamName(e.target.value)}
+                placeholder="e.g., Mid-Term, Final, Unit Test 1"
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                type="number"
+                label="Maximum Marks"
+                value={maxMarks}
+                onChange={(e) => setMaxMarks(e.target.value)}
+                placeholder="e.g., 100"
+              />
+            </Grid>
+          </Grid>
+
+          <Typography variant="subtitle2" gutterBottom fontWeight={600} sx={{ mb: 2 }}>
+            Enter marks for each student:
+          </Typography>
+
+          <TableContainer sx={{ maxHeight: 400 }}>
+            <Table stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell><strong>Roll</strong></TableCell>
+                  <TableCell><strong>Student Name</strong></TableCell>
+                  <TableCell width="150px"><strong>Marks Obtained</strong></TableCell>
+                  <TableCell align="center"><strong>Grade</strong></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {students.map((student) => {
+                  const marks = marksData[student.student_id]
+                  const grade = calculateGrade(marks, maxMarks)
+                  
+                  return (
+                    <TableRow key={student.student_id}>
+                      <TableCell>{student.roll_no}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={600}>
+                          {student.fname} {student.lname}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <TextField
+                          type="number"
+                          size="small"
+                          fullWidth
+                          value={marks}
+                          onChange={(e) => handleMarksChange(student.student_id, e.target.value)}
+                          inputProps={{ min: 0, max: maxMarks }}
+                          placeholder="Enter marks"
+                        />
+                      </TableCell>
+                      <TableCell align="center">
+                        {marks && maxMarks ? (
+                          <Chip
+                            label={grade}
+                            color={getGradeColor(grade)}
+                            size="small"
+                            sx={{ fontWeight: 600 }}
+                          />
+                        ) : (
+                          '-'
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setDialogOpen(false)} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmitMarks}
+            disabled={submitting}
+            startIcon={<Save />}
+            sx={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+          >
+            {submitting ? 'Submitting...' : 'Submit Marks'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

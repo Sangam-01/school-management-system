@@ -36,13 +36,8 @@ const Defaulters = () => {
       const response = await api.get('/accountant/defaulters')
 
       if (response.data.status === 'success') {
-  const normalized = response.data.data.map(d => ({
-    ...d,
-    total_pending: d.pending_amount // 👈 map backend → frontend
-  }))
-  setDefaulters(normalized)
-}
- else {
+        setDefaulters(response.data.data)
+      } else {
         setError(response.data.message)
       }
     } catch (err) {

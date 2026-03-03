@@ -99,7 +99,7 @@ function App() {
               <Routes>
                 <Route path="dashboard" element={<AccountantDashboard />} />
                 <Route path="profile" element={<AccountantProfile />} />
-                {/* <Route path="fee-categories" element={<FeeCategories />} /> */}
+                <Route path="fee-categories" element={<FeeCategories />} />
                 //<Route path="students" element={<StudentFees />} />
                 <Route path="transactions" element={<Transactions />} />
                 <Route path="reports" element={<Reports />} />
